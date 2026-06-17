@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "feishu-md-tables"
+version = "0.2.1"
+description = "Auto-convert markdown tables in Feishu outgoing messages to Feishu CardKit v2 `table` components."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "kibo", email = "kilimanjaro.roy@gmail.com" }]
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools]
+# The plugin's runtime code is at the top of the repo (it isn't a normal
+# `feishu_md_tables/` package — tests load it via importlib so the
+# hyphenated directory name works on disk as Hermes expects).
+py-modules = ["__init__", "interceptor", "parser", "card_builder"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*", "*Test"]
+python_functions = ["test_*"]
