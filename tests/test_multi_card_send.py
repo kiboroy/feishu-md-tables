@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -51,8 +52,16 @@ interceptor_mod = _load_file(
     "feishu_md_tables_send", ROOT / "interceptor.py", _plugin_pkg
 )
 
-# 加载 hermes 源码（提供 FeishuAdapter 类）
-HERMES = Path("/home/ubuntu/.hermes/hermes-agent")
+# 加载 hermes 源码（提供 FeishuAdapter 类）。
+# Resolve hermes-agent the same way hermes itself does: read HERMES_HOME
+# env var (the documented override), fall back to ~/.hermes, then assume
+# the agent checkout lives at <hermes-home>/hermes-agent. This keeps the
+# test suite runnable on any contributor's machine instead of hardcoding
+# /home/ubuntu/.hermes/hermes-agent.
+_HERMES_HOME = Path(
+    os.environ.get("HERMES_HOME", "").strip() or str(Path.home() / ".hermes")
+)
+HERMES = _HERMES_HOME / "hermes-agent"
 sys.path.insert(0, str(HERMES))
 
 

@@ -49,8 +49,16 @@ card_builder = _load_file(
 )
 
 
-# 加载 hermes 源码
-HERMES = Path("/home/ubuntu/.hermes/hermes-agent")
+# 加载 hermes 源码。
+# Resolve hermes-agent the same way hermes itself does: read HERMES_HOME
+# env var (the documented override), fall back to ~/.hermes, then assume
+# the agent checkout lives at <hermes-home>/hermes-agent. This keeps the
+# test suite runnable on any contributor's machine instead of hardcoding
+# /home/ubuntu/.hermes/hermes-agent.
+_HERMES_HOME = Path(
+    os.environ.get("HERMES_HOME", "").strip() or str(Path.home() / ".hermes")
+)
+HERMES = _HERMES_HOME / "hermes-agent"
 sys.path.insert(0, str(HERMES))
 
 
