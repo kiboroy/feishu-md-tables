@@ -167,30 +167,6 @@ the user would see N "reply to X" annotations).
 If one card fails to send, the loop aborts and returns the failed
 response — the remaining cards are **not** sent.
 
-## Changelog
-
-### 0.2.1 (2026-06-17) — fix 飞书入站死锁
-
-**Bug**: v0.2.0 引入的 `_handle_feishu_send_card` 工具**不**走 `split_blocks_by_table_groups` 切分路径,直接 `build_card(blocks, cfg)` 把所有 table 塞进一张卡片。当 LLM 拼 6+ 表消息时:
-
-1. 飞书 API 拒收 ([ErrCode 11310](https://open.feishu.cn/document/feishu-cards/feishu-card-cardkit/components/table) "card table number over limit")
-2. 飞书 Lark SDK 内部异常处理中 `asyncio Event loop is closed`
-3. WebSocket 断连,且重连失败 (`connect failed, err: Event loop is closed`)
-4. **飞书入站消息全丢** — 用户在飞书打的字一个字都收不到,直到 gateway 重启
-
-**Fix** (3 处):
-
-1. `build_card` 防御性降级:单卡 table 数 > `cfg.max_tables_per_card` 时,**降级**为 markdown key:value 文本(不丢数据,只是格式退化),不再 silent 塞进 elements 列表
-2. `_handle_feishu_send_card` 走切分+循环发送路径:复用 `parser.split_blocks_by_table_groups`,每组 build_card + 独立 `adapter._send_raw_message`,行为与 `send()` 路径完全一致
-3. 删掉孤儿常量 `MAX_TABLES_PER_CARD=3` —— build_card 现在严格使用 `cfg.max_tables_per_card`,用户配置真正生效
-
-**Tests**:
-- 4 个新断言覆盖降级行为(`test_six_tables_overflow_gets_downgraded` 等)
-- 2 个老断言("build_card 不切分, 6 表全要出来")更新为反映新行为
-- 总测试数 51 → 53,全部通过
-
-**升级提示**: gateway 重启后生效。重启前已有的入站死锁**不会**自动恢复 —— 必须 `hermes gateway restart`。
-
 ## Caveats
 
 - **column names with non-ASCII characters** are sanitized to ASCII
@@ -216,3 +192,8 @@ response — the remaining cards are **not** sent.
 ## License
 
 MIT
+
+## Changelog
+
+Release notes live in [`CHANGELOG.md`](./CHANGELOG.md). See that file
+for version history, upgrade notes, and known-issue workarounds.
