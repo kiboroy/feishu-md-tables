@@ -1,0 +1,8 @@
+name: feishu-md-tables
+version: 0.2.1
+description: "Auto-convert markdown tables in Feishu outgoing messages to Feishu CardKit v2 `table` components. Multi-table messages auto-split into multiple cards (default 2 tables per card). Also exposes a `feishu_send_card` tool for explicit card sending."
+author: kibo
+homepage: https://github.com/kiboroy/feishu-md-tables
+license: MIT
+provides_tools:
+  - feishu_send_card
