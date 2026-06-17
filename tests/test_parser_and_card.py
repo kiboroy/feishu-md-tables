@@ -369,5 +369,114 @@ class TestTableLimit(unittest.TestCase):
         self.assertEqual(table_el["page_size"], 10)
 
 
+class TestDuplicateColumnNames(unittest.TestCase):
+    """回归测试:列名重复时,sanitize 必须去重,否则 row dict 字段数 < 列数,
+    飞书 CardKit 服务端按 position 取列名会报 'column idx:N' 错位。
+
+    复现:2026-06-17 11:20:33 招商银行 Q1 2026 摘要第 3 张表 7 列含 2 个 'YoY',
+    飞书 API 拒收,errCode 200908 'column idx:5'。"""
+
+    def test_two_duplicate_names_get_suffix(self):
+        """两个相同列名 → 第二个追加 _<idx> 后缀。"""
+        md = (
+            "| A | B | A | C |\n"
+            "|---|---|---|---|\n"
+            "| 1 | 2 | 3 | 4 |\n"
+        )
+        t = parse_markdown_table(md)
+        names = [c.name for c in t.columns]
+        # name 必须唯一
+        self.assertEqual(len(names), len(set(names)),
+                         f"column names not unique: {names}")
+        # 第一个保留,第二个加后缀
+        self.assertEqual(names, ["A", "B", "A_2", "C"])
+        # display_name 不变(去重只影响 name,不影响显示)
+        self.assertEqual([c.display_name for c in t.columns],
+                         ["A", "B", "A", "C"])
+
+    def test_three_duplicate_names_get_incrementing_suffixes(self):
+        """三个相同列名 → 第二、三个分别加 _<idx> 后缀。"""
+        md = (
+            "| X | Y | X | Z | X |\n"
+            "|---|---|---|---|---|\n"
+            "| 1 | 2 | 3 | 4 | 5 |\n"
+        )
+        t = parse_markdown_table(md)
+        names = [c.name for c in t.columns]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(names, ["X", "Y", "X_2", "Z", "X_4"])
+
+    def test_duplicate_after_sanitize_prefix(self):
+        """sanitize 后本身没冲突、但 display_name 不同时,name 仍唯一。"""
+        # 验证正常情况没回归
+        md = (
+            "| YoY | YoY | revenue |\n"
+            "|---|---|---|\n"
+            "| 1 | 2 | 3 |\n"
+        )
+        t = parse_markdown_table(md)
+        names = [c.name for c in t.columns]
+        self.assertEqual(len(names), len(set(names)))
+        # display_name 保留原样
+        self.assertEqual([c.display_name for c in t.columns],
+                         ["YoY", "YoY", "revenue"])
+
+    def test_row_dict_keys_match_columns(self):
+        """最关键的回归:row 字典字段数 == 列数(下游 _row_dict 用 name 当 key)。"""
+        # 复现原报错的 7 列 8 行结构(2 个 YoY)
+        md = (
+            "| 季度 | 营收（¥亿） | YoY | 净利（¥亿） | YoY | EPS（¥） | 季末 ROE |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "| Q1 2026 | 720.94 | +1.66% | 378.52 | +1.52% | 1.49 | 11.98% |\n"
+        )
+        t = parse_markdown_table(md)
+        cfg = CardConfig()
+        elem = {
+            "tag": "table",
+            "page_size": 5,
+            "columns": [
+                {"name": c.name, "display_name": c.display_name,
+                 "data_type": cfg.cell_data_type, "horizontal_align": c.align}
+                for c in t.columns
+            ],
+            "rows": [
+                {c.name: cell for c, cell in zip(t.columns, row)}
+                for row in t.rows
+            ],
+        }
+        # 关键断言:row 字段数 == 列数
+        self.assertEqual(len(elem["rows"][0]), len(elem["columns"]),
+                         f"row keys={list(elem['rows'][0].keys())}, "
+                         f"columns={[c['name'] for c in elem['columns']]}")
+        # 每个 column.name 都能在 row 里找到
+        for col in elem["columns"]:
+            self.assertIn(col["name"], elem["rows"][0],
+                          f"column {col['name']!r} missing from row keys")
+        # 第一列的 YoY 应该是 +1.66%(不被覆盖)
+        yoy_cols = [c for c in elem["columns"] if c["display_name"] == "YoY"]
+        self.assertEqual(len(yoy_cols), 2)
+        # 第一个 YoY 的 cell 是 +1.66%
+        first_yoy = yoy_cols[0]["name"]
+        self.assertEqual(elem["rows"][0][first_yoy], "+1.66%",
+                         f"first YoY cell should be '+1.66%', got "
+                         f"{elem['rows'][0][first_yoy]!r}")
+        # 第二个 YoY 的 cell 是 +1.52%
+        second_yoy = yoy_cols[1]["name"]
+        self.assertEqual(elem["rows"][0][second_yoy], "+1.52%",
+                         f"second YoY cell should be '+1.52%', got "
+                         f"{elem['rows'][0][second_yoy]!r}")
+
+    def test_no_duplicate_does_not_add_suffix(self):
+        """无重复时,名字保持原样(无回归)。"""
+        md = (
+            "| Name | Score | Year |\n"
+            "|---|---|---|\n"
+            "| Alice | 98 | 2026 |\n"
+        )
+        t = parse_markdown_table(md)
+        self.assertEqual([c.name for c in t.columns],
+                         ["Name", "Score", "Year"])
+
+
 if __name__ == "__main__":
     unittest.main()

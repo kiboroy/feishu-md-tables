@@ -144,10 +144,25 @@ def parse_markdown_table(block: str) -> Optional[MarkdownTable]:
     sep_cells = _split_row(lines[1])
 
     columns: List[TableColumn] = []
+    used_names: set = set()
     for i, (hcell, scell) in enumerate(zip(header_cells, sep_cells)):
+        base = _sanitize_name(hcell, i)
+        # 防御性去重:飞书 table 组件的 row 用 column.name 当 dict key
+        # (见 card_builder._row_dict),重名会导致后写覆盖前写、row 字段数 < 列数
+        # 服务端校验时按 position 取列名失败,报 "column idx:N" 错位
+        # (复现:2026-06-17 招商银行 Q1 2026 摘要第 3 张表 7 列含 2 个 "YoY")
+        name = base
+        if name in used_names:
+            name = f"{base}_{i}"
+            # 极端兜底:如果仍然冲突(极端 sanitize 巧合),继续 _i++ 直到唯一
+            suffix = i
+            while name in used_names:
+                suffix += 1
+                name = f"{base}_{suffix}"
+        used_names.add(name)
         columns.append(
             TableColumn(
-                name=_sanitize_name(hcell, i),
+                name=name,
                 display_name=hcell.strip(),
                 align=_parse_align(scell),
             )

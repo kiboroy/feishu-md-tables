@@ -6,7 +6,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-(none yet)
+**Bug fix:**
+- `parser.parse_markdown_table` now de-duplicates sanitized column `name`s.
+  When two header cells sanitize to the same `name` (e.g. two `"YoY"`
+  columns), the second and subsequent occurrences get a `_N` suffix
+  (where `N` is the column's 0-based index) so the resulting `name` list
+  is guaranteed unique. Without this, `card_builder._row_dict` built
+  `rows` as `{name: cell}` dicts, and a duplicate `name` caused the
+  second cell to overwrite the first — the resulting row had fewer
+  keys than there were columns, and Feishu's CardKit v2 server rejected
+  the card with `errCode 200908 'column idx:N'` (the index it reports
+  is the 0-based offset where the missing key was expected).
+  `display_name` is unchanged, so cell labels in the Feishu client still
+  show the original header text.
+  - Reproduced 2026-06-17: a 7-column financial summary table (Q1 2026
+    招商银行) with two `"YoY"` columns was split into the 2/2 card
+    group and the second card failed to send with `column idx:5`.
+  - 5 new regression tests in
+    `tests/test_parser_and_card.py::TestDuplicateColumnNames`.
+
+**Tests:**
+- 5 new tests in `TestDuplicateColumnNames` covering: 2 duplicates,
+  3 duplicates, duplicates after sanitize prefix, row-dict key parity
+  (the exact end-to-end shape Feishu sees), and no-false-positives on
+  non-duplicate input.
 
 ## [0.2.2] - 2026-06-17
 
